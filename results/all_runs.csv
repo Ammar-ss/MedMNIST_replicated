@@ -1,0 +1,91 @@
+dataset,run,seed,test_auc,test_acc,gpu,mixed_precision,train_hours,session
+chestmnist,1,1,0.7718,0.9479,NVIDIA GeForce RTX 3090,yes,,RTX 3090 server (run folder lost; numbers from the training log)
+chestmnist,2,2,0.7699,0.9476,NVIDIA GeForce RTX 3090,yes,,RTX 3090 server (run folder lost; numbers from the training log)
+chestmnist,3,3,0.7738,0.9473,NVIDIA GeForce RTX 3090,yes,,RTX 3090 server (run folder lost; numbers from the training log)
+chestmnist,4,4,0.7714,0.9471,NVIDIA GeForce RTX 3090,yes,,RTX 3090 server (run folder lost; numbers from the training log)
+chestmnist,5,5,0.7696,0.9470,Tesla T4,yes,8.0,chestmnist_resnet50_224.ipynb
+pathmnist,1,1,0.9894,0.9102,Tesla T4,yes,3.0,medmnist_part3_3d.ipynb then medmnist_part3_next_tissuemnist_3_pathmnist.ipynb
+pathmnist,2,2,0.9869,0.8833,Tesla T4,yes,,medmnist-r3-acc2-tissuemnist-3-4-pathmnist-2.ipynb
+pathmnist,3,3,0.9875,0.8997,Tesla T4,yes,3.7,medmnist_part3_3d.ipynb then medmnist_part3_next_tissuemnist_3_pathmnist.ipynb
+pathmnist,4,4,0.9931,0.9031,Tesla T4,yes,,medmnist-r3-acc1-pathmnist-4-5-organamnist-5.ipynb
+pathmnist,5,5,0.9910,0.8804,Tesla T4,yes,,medmnist-r3-acc1-pathmnist-4-5-organamnist-5.ipynb
+dermamnist,1,1,0.9155,0.7556,Tesla T4,yes,0.7,medmnist_part1_small_2d.ipynb
+dermamnist,2,2,0.9091,0.7387,Tesla T4,yes,0.7,medmnist_part1_small_2d.ipynb
+dermamnist,3,3,0.9094,0.7287,Tesla T4,yes,0.7,medmnist_part1_small_2d.ipynb
+dermamnist,4,4,0.9146,0.7436,Tesla T4,yes,0.7,medmnist_part1_small_2d.ipynb
+dermamnist,5,5,0.9064,0.6943,Tesla T4,yes,0.7,medmnist_part1_small_2d.ipynb
+octmnist,1,1,0.9610,0.7670,Tesla T4,yes,3.1,medmnist_part4_3d.ipynb then medmnist_part4_next_octmnist.ipynb
+octmnist,2,2,0.9576,0.7570,Tesla T4,yes,4.1,medmnist_part4_3d.ipynb then medmnist_part4_next_octmnist.ipynb
+octmnist,3,3,0.9609,0.7760,Tesla T4,yes,,medmnist-r3-acc2-tissuemnist-5-octmnist-3-5.ipynb
+octmnist,4,4,0.9602,0.7650,Tesla T4,yes,,medmnist-r3-acc2-tissuemnist-5-octmnist-3-5.ipynb
+octmnist,5,5,0.9623,0.7750,Tesla T4,yes,,medmnist-r4-acc2-finish.ipynb
+pneumoniamnist,1,1,0.9623,0.8526,Tesla T4,yes,0.5,medmnist_part1_small_2d.ipynb
+pneumoniamnist,2,2,0.9452,0.8157,Tesla T4,yes,0.5,medmnist_part1_small_2d.ipynb
+pneumoniamnist,3,3,0.9569,0.8269,Tesla T4,yes,0.5,medmnist_part1_small_2d.ipynb
+pneumoniamnist,4,4,0.9451,0.8189,Tesla T4,yes,0.5,medmnist_part1_small_2d.ipynb
+pneumoniamnist,5,5,0.9717,0.8798,Tesla T4,yes,0.5,medmnist_part1_small_2d.ipynb
+retinamnist,1,1,0.7102,0.4750,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+retinamnist,2,2,0.7177,0.5200,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+retinamnist,3,3,0.7197,0.5000,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+retinamnist,4,4,0.7013,0.5275,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+retinamnist,5,5,0.6888,0.5325,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+breastmnist,1,1,0.8657,0.8590,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+breastmnist,2,2,0.8412,0.8269,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+breastmnist,3,3,0.8277,0.8141,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+breastmnist,4,4,0.8601,0.8333,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+breastmnist,5,5,0.7766,0.7500,Tesla T4,yes,0.1,medmnist_part1_small_2d.ipynb
+bloodmnist,1,1,0.9975,0.9544,Tesla T4,yes,1.1,medmnist_part1_small_2d.ipynb
+bloodmnist,2,2,0.9977,0.9576,Tesla T4,yes,1.2,medmnist_part1_small_2d.ipynb
+bloodmnist,3,3,0.9975,0.9573,Tesla T4,yes,1.1,medmnist_part1_small_2d.ipynb
+bloodmnist,4,4,0.9974,0.9512,Tesla T4,yes,1.1,medmnist_part1_small_2d.ipynb
+bloodmnist,5,5,0.9975,0.9544,Tesla T4,yes,1.1,medmnist_part1_small_2d.ipynb
+tissuemnist,1,1,0.9275,0.6703,Tesla T4,yes,,medmnist-r4-acc1-finish.ipynb
+tissuemnist,2,2,0.9304,0.6776,Tesla T4,yes,,medmnist-r4-acc1-finish.ipynb
+tissuemnist,3,3,0.9273,0.6694,Tesla T4,yes,,medmnist-r3-acc2-tissuemnist-3-4-pathmnist-2.ipynb
+tissuemnist,4,4,0.9255,0.6635,Tesla T4,yes,,medmnist-r4-acc2-finish.ipynb
+tissuemnist,5,5,0.9270,0.6691,Tesla T4,yes,,medmnist-r4-acc2-finish.ipynb
+organamnist,1,1,0.9974,0.9372,Tesla T4,yes,3.3,medmnist_part2_organ_2d.ipynb
+organamnist,2,2,0.9979,0.9450,Tesla T4,yes,3.3,medmnist_part2_organ_2d.ipynb
+organamnist,3,3,0.9950,0.9358,Tesla T4,yes,3.3,medmnist_part2_organ_2d.ipynb
+organamnist,4,4,0.9941,0.9312,Tesla T4,yes,3.3,medmnist_part2_organ_2d.ipynb
+organamnist,5,5,0.9971,0.9387,Tesla T4,yes,,medmnist-r3-acc1-pathmnist-4-5-organamnist-5.ipynb
+organcmnist,1,1,0.9944,0.9227,Tesla T4,yes,1.3,medmnist_part2_organ_2d.ipynb
+organcmnist,2,2,0.9941,0.9198,Tesla T4,yes,1.3,medmnist_part2_organ_2d.ipynb
+organcmnist,3,3,0.9928,0.9159,Tesla T4,yes,1.3,medmnist_part2_organ_2d.ipynb
+organcmnist,4,4,0.9934,0.9183,Tesla T4,yes,1.3,medmnist_part2_organ_2d.ipynb
+organcmnist,5,5,0.9937,0.9180,Tesla T4,yes,1.3,medmnist_part2_organ_2d.ipynb
+organsmnist,1,1,0.9759,0.7926,Tesla T4,yes,1.4,medmnist_part1_small_2d.ipynb
+organsmnist,2,2,0.9771,0.7832,Tesla T4,yes,1.3,medmnist_part1_small_2d.ipynb
+organsmnist,3,3,0.9738,0.7761,Tesla T4,yes,1.4,medmnist_part1_small_2d.ipynb
+organsmnist,4,4,0.9749,0.7798,Tesla T4,yes,1.3,medmnist_part1_small_2d.ipynb
+organsmnist,5,5,0.9769,0.7898,Tesla T4,yes,1.4,medmnist_part1_small_2d.ipynb
+organmnist3d,1,1,0.9934,0.8803,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+organmnist3d,2,2,0.9955,0.8984,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+organmnist3d,3,3,0.9894,0.8410,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+organmnist3d,4,4,0.9922,0.8820,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+organmnist3d,5,5,0.9946,0.8787,Tesla T4,yes,0.4,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+nodulemnist3d,1,1,0.8984,0.8484,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+nodulemnist3d,2,2,0.8831,0.8548,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+nodulemnist3d,3,3,0.8559,0.8290,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+nodulemnist3d,4,4,0.8621,0.8677,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+nodulemnist3d,5,5,0.8303,0.7968,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+fracturemnist3d,1,1,0.7449,0.5875,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+fracturemnist3d,2,2,0.7200,0.5250,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+fracturemnist3d,3,3,0.7276,0.4833,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+fracturemnist3d,4,4,0.7650,0.5958,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+fracturemnist3d,5,5,0.7628,0.5208,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+adrenalmnist3d,1,1,0.8259,0.7886,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+adrenalmnist3d,2,2,0.8545,0.7852,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+adrenalmnist3d,3,3,0.8714,0.8188,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+adrenalmnist3d,4,4,0.8048,0.7852,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+adrenalmnist3d,5,5,0.8625,0.8121,Tesla T4,yes,0.5,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+vesselmnist3d,1,1,0.8962,0.8953,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+vesselmnist3d,2,2,0.8609,0.8901,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+vesselmnist3d,3,3,0.8653,0.8822,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+vesselmnist3d,4,4,0.9229,0.9136,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+vesselmnist3d,5,5,0.8503,0.8010,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+synapsemnist3d,1,1,0.7945,0.7614,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+synapsemnist3d,2,2,0.8708,0.8011,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+synapsemnist3d,3,3,0.8247,0.7557,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+synapsemnist3d,4,4,0.8444,0.8153,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb
+synapsemnist3d,5,5,0.8650,0.8125,Tesla T4,yes,0.6,medmnist_part3_3d.ipynb then medmnist_part4_3d.ipynb

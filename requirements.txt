@@ -1,0 +1,6 @@
+# What the notebooks install. torch and torchvision came preinstalled on Kaggle's GPU image.
+medmnist==3.0.2
+acsconv==0.1.1
+tensorboardX
+torch
+torchvision

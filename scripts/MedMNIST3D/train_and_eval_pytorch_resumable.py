@@ -1,0 +1,603 @@
+# Patched copy of MedMNIST3D/train_and_eval_pytorch.py from https://github.com/MedMNIST/experiments
+# (commit 70b6b3a7ad7afddff1df2a3b735235830fbdb142, Apache License 2.0).
+#
+# Unchanged from the released script: model (ResNet-18/50 from models.py converted with ACSConv's
+# 2.5D / 3D / ACS converters, BatchNorm swapped for the repo's SynchronizedBatchNorm), Transform3D
+# (random scaling for --shape_transform), cross-entropy loss, Adam lr 0.001, MultiStepLR at 50% and
+# 75% of the epochs (gamma 0.1), epochs, batch size, model selection on the best validation AUC,
+# and the final evaluation with medmnist.Evaluator.
+#
+# Every change is marked "PATCH". Same execution-only changes as the 2D patched script
+# (checkpoint/resume, --deadline, GPU index fix, mps/cpu, fixed run folder, result.json,
+# --seed, --workers, --no_weights, --amp, --skip_logging_evals), plus:
+#   * apply_acsconv_fix(): ACSConv 0.1.1 crashes while converting BatchNorm on new PyTorch
+#     (tested: 2.15.0) because BatchNorm gained a keyword argument `bias: bool` and the converter
+#     copies getattr(bn, 'bias'), which is the bias tensor. The fix passes True/False instead.
+#     The converted network is the same: 53 Conv3d + 53 BatchNorm3d (affine, eps 1e-5,
+#     momentum 0.1), 46,160,843 parameters for ResNet-50 with 3 input channels and 11 classes.
+
+import argparse
+import json  # PATCH
+import os
+import platform  # PATCH
+import random  # PATCH
+import sys  # PATCH
+import time
+from collections import OrderedDict
+from copy import deepcopy
+
+import medmnist
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.utils.data as data
+import torchvision.transforms as transforms
+from acsconv.converters import ACSConverter, Conv2_5dConverter, Conv3dConverter
+from medmnist import INFO, Evaluator
+from models import ResNet18, ResNet50
+from tensorboardX import SummaryWriter
+from tqdm import trange
+from utils import Transform3D, model_to_syncbn
+
+EXIT_PAUSED = 3  # PATCH
+
+
+# ---------------------------------------------------------------- PATCH: ACSConv fix
+def apply_acsconv_fix():
+    """Replace ACSConv's BaseConverter.convert_module with a copy that differs in one place:
+    when the 3D norm layer's __init__ has a `bias` argument, pass a bool, not the tensor."""
+    import acsconv.converters.base_converter as bc
+    from acsconv.utils import _triple_same
+    if getattr(bc.BaseConverter, '_bias_bool_fix', False):
+        return
+
+    def convert_module(self, module):
+        for child_name, child in module.named_children():
+            if isinstance(child, nn.Conv2d):
+                arguments = nn.Conv2d.__init__.__code__.co_varnames[1:]
+                arguments = [a for a in arguments if a not in ['device', 'dtype', 'factory_kwargs', 'kernel_size_', 'stride_', 'padding_', 'dilation_']]
+                kwargs = {k: getattr(child, k) for k in arguments}
+                kwargs = self.convert_conv_kwargs(kwargs)
+                setattr(module, child_name, self.__class__.target_conv(**kwargs))
+            elif hasattr(nn, child.__class__.__name__) and \
+                ('pool' in child.__class__.__name__.lower() or
+                'norm' in child.__class__.__name__.lower()):
+                if hasattr(nn, child.__class__.__name__.replace('2d', '3d')):
+                    TargetClass = getattr(nn, child.__class__.__name__.replace('2d', '3d'))
+                    arguments = TargetClass.__init__.__code__.co_varnames[1:]
+                    arguments = [a for a in arguments if a not in ['device', 'dtype', 'factory_kwargs']]
+                    kwargs = {k: getattr(child, k) for k in arguments}
+                    if 'bias' in kwargs and not isinstance(kwargs['bias'], bool):  # the fix
+                        kwargs['bias'] = kwargs['bias'] is not None
+                    if 'adaptive' in child.__class__.__name__.lower():
+                        for k in kwargs.keys():
+                            if not isinstance(kwargs[k], bool):
+                                kwargs[k] = _triple_same(kwargs[k])
+                    setattr(module, child_name, TargetClass(**kwargs))
+                else:
+                    raise Exception('No corresponding module in 3D for 2d module {}'.format(child.__class__.__name__))
+            elif isinstance(child, nn.Upsample):
+                arguments = nn.Upsample.__init__.__code__.co_varnames[1:]
+                kwargs = {k: getattr(child, k) for k in arguments}
+                kwargs['mode'] = 'trilinear' if kwargs['mode'] == 'bilinear' else kwargs['mode']
+                setattr(module, child_name, nn.Upsample(**kwargs))
+            else:
+                self.convert_module(child)
+        return module
+
+    bc.BaseConverter.convert_module = convert_module
+    bc.BaseConverter._bias_bool_fix = True
+
+
+apply_acsconv_fix()
+
+
+# ---------------------------------------------------------------- PATCH: helpers (same as 2D)
+def pick_device(gpu_ids):
+    s = str(gpu_ids).strip().lower()
+    if s == 'mps':
+        return torch.device('mps')
+    if s in ('cpu', '', '-1'):
+        return torch.device('cpu')
+    first = int(s.split(',')[0])
+    return torch.device('cpu') if first < 0 else torch.device('cuda:{}'.format(first))
+
+
+def get_rng_state(device):
+    state = {'torch': torch.get_rng_state(), 'numpy': np.random.get_state(), 'python': random.getstate()}
+    if device.type == 'cuda':
+        state['cuda'] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def set_rng_state(state, device):
+    torch.set_rng_state(state['torch'])
+    np.random.set_state(state['numpy'])
+    random.setstate(state['python'])
+    if device.type == 'cuda' and 'cuda' in state:
+        torch.cuda.set_rng_state_all(state['cuda'])
+
+
+def consume_loader_rng(loader):
+    """See the 2D script: keeps the RNG stream identical when an evaluation pass is skipped."""
+    torch.empty((), dtype=torch.int64).random_(generator=loader.generator)
+
+
+def make_grad_scaler():
+    try:
+        return torch.amp.GradScaler('cuda')
+    except (AttributeError, TypeError):
+        return torch.cuda.amp.GradScaler()
+
+
+def atomic_torch_save(obj, path):
+    tmp = path + '.tmp'
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
+
+
+def atomic_json(obj, path):
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(obj, f, indent=2)
+    os.replace(tmp, path)
+
+
+def main(data_flag, output_root, num_epochs, gpu_ids, batch_size, size, conv, pretrained_3d, download, model_flag, as_rgb, shape_transform, model_path, run,
+         seed=None, amp=False, skip_logging_evals=False, workers=0, deadline=None, no_weights=False, ckpt_every=600):  # PATCH
+
+    lr = 0.001
+    gamma=0.1
+    milestones = [0.5 * num_epochs, 0.75 * num_epochs]
+
+    info = INFO[data_flag]
+    task = info['task']
+    n_channels = 3 if as_rgb else info['n_channels']
+    n_classes = len(info['label'])
+
+    DataClass = getattr(medmnist, info['python_class'])
+
+    # PATCH: device selection (see pick_device)
+    device = pick_device(gpu_ids)
+    if device.type == 'cuda':
+        torch.cuda.set_device(device)  # PATCH: pinned-memory thread and default CUDA ops use this GPU too
+    if amp and device.type != 'cuda':
+        print('[patch] --amp is only used on CUDA GPUs; running in float32 on', device)
+        amp = False
+    if amp:
+        torch.backends.cudnn.benchmark = True
+    channels_last = amp
+
+    # PATCH: fixed run folder
+    output_root = os.path.join(output_root, data_flag, run)
+    if not os.path.exists(output_root):
+        os.makedirs(output_root)
+    result_path = os.path.join(output_root, 'result.json')
+    ckpt_path = os.path.join(output_root, 'checkpoint.pt')
+    progress_path = os.path.join(output_root, 'progress.json')
+    if model_path is None and num_epochs > 0 and os.path.exists(result_path):
+        print('[patch] already finished:', result_path)
+        return 0
+
+    if seed is not None:  # PATCH
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+
+    print('==> Preparing data...')
+
+    train_transform = Transform3D(mul='random') if shape_transform else Transform3D()
+    eval_transform = Transform3D(mul='0.5') if shape_transform else Transform3D()
+
+    train_dataset = DataClass(split='train', transform=train_transform, download=download, as_rgb=as_rgb, size=size)
+    train_dataset_at_eval = DataClass(split='train', transform=eval_transform, download=download, as_rgb=as_rgb, size=size)
+    val_dataset = DataClass(split='val', transform=eval_transform, download=download, as_rgb=as_rgb, size=size)
+    test_dataset = DataClass(split='test', transform=eval_transform, download=download, as_rgb=as_rgb, size=size)
+
+    # PATCH: optional workers. With --shape_transform the random scaling then comes from the
+    # workers' numpy generators, so values differ from a workers=0 run (same distribution).
+    loader_kw = dict(num_workers=workers, pin_memory=(device.type == 'cuda'))
+    train_loader = data.DataLoader(dataset=train_dataset,
+                                batch_size=batch_size,
+                                shuffle=True, **loader_kw)
+    train_loader_at_eval = data.DataLoader(dataset=train_dataset_at_eval,
+                                batch_size=batch_size,
+                                shuffle=False, **loader_kw)
+    val_loader = data.DataLoader(dataset=val_dataset,
+                                batch_size=batch_size,
+                                shuffle=False, **loader_kw)
+    test_loader = data.DataLoader(dataset=test_dataset,
+                                batch_size=batch_size,
+                                shuffle=False, **loader_kw)
+
+    print('==> Building and training model...')
+
+    if model_flag == 'resnet18':
+        model = ResNet18(in_channels=n_channels, num_classes=n_classes)
+    elif model_flag == 'resnet50':
+        model = ResNet50(in_channels=n_channels, num_classes=n_classes)
+    else:
+        raise NotImplementedError
+
+    if conv=='ACSConv':
+        model = model_to_syncbn(ACSConverter(model))
+    if conv=='Conv2_5d':
+        model = model_to_syncbn(Conv2_5dConverter(model))
+    if conv=='Conv3d':
+        if pretrained_3d == 'i3d':
+            model = model_to_syncbn(Conv3dConverter(model, i3d_repeat_axis=-3))
+        else:
+            model = model_to_syncbn(Conv3dConverter(model, i3d_repeat_axis=None))
+    if conv not in ('ACSConv', 'Conv2_5d', 'Conv3d'):  # PATCH: the released script silently keeps a 2D model
+        sys.exit('[patch] --conv must be ACSConv, Conv2_5d or Conv3d (got %r)' % conv)
+
+    model = model.to(device)
+    if channels_last:  # PATCH (AMP only)
+        model = model.to(memory_format=torch.channels_last_3d)
+
+    train_evaluator = medmnist.Evaluator(data_flag, 'train', size=size)
+    val_evaluator = medmnist.Evaluator(data_flag, 'val', size=size)
+    test_evaluator = medmnist.Evaluator(data_flag, 'test', size=size)
+
+    criterion = nn.CrossEntropyLoss()
+
+    evkw = dict(amp=amp, channels_last=channels_last)  # PATCH
+
+    if model_path is not None:
+        model.load_state_dict(torch.load(model_path, map_location=device)['net'], strict=True)
+        train_metrics = test(model, train_evaluator, train_loader_at_eval, criterion, device, run, output_root, **evkw)
+        val_metrics = test(model, val_evaluator, val_loader, criterion, device, run, output_root, **evkw)
+        test_metrics = test(model, test_evaluator, test_loader, criterion, device, run, output_root, **evkw)
+
+        print('train  auc: %.5f  acc: %.5f\n' % (train_metrics[1], train_metrics[2]) + \
+              'val  auc: %.5f  acc: %.5f\n' % (val_metrics[1], val_metrics[2]) + \
+              'test  auc: %.5f  acc: %.5f\n' % (test_metrics[1], test_metrics[2]))
+
+    if num_epochs == 0:
+        return 0
+
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma)
+    scaler = make_grad_scaler() if amp else None  # PATCH
+
+    logs = ['loss', 'auc', 'acc']
+    train_logs = ['train_'+log for log in logs]
+    val_logs = ['val_'+log for log in logs]
+    test_logs = ['test_'+log for log in logs]
+    log_dict = OrderedDict.fromkeys(train_logs+val_logs+test_logs, 0)
+
+    writer = SummaryWriter(log_dir=os.path.join(output_root, 'Tensorboard_Results'))
+
+    best_auc = 0
+    best_epoch = 0
+    best_model = deepcopy(model)
+
+    global iteration
+    iteration = 0
+
+    # ------------------------------------------------------------ PATCH: resume
+    settings = dict(data_flag=data_flag, model_flag=model_flag, conv=conv, pretrained_3d=pretrained_3d,
+                    as_rgb=as_rgb, shape_transform=shape_transform, size=size, batch_size=batch_size,
+                    num_epochs=num_epochs, amp=amp, seed=seed)
+    start_epoch = 0
+    history = []
+    sessions = 1
+    if os.path.exists(ckpt_path):
+        try:
+            ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+        except TypeError:  # PyTorch older than 1.13 has no weights_only argument
+            ckpt = torch.load(ckpt_path, map_location='cpu')
+        if ckpt['settings'] != settings:
+            sys.exit('[patch] checkpoint settings %s do not match this command %s; '
+                     'use another --output_root or delete %s' % (ckpt['settings'], settings, ckpt_path))
+        model.load_state_dict(ckpt['model'])
+        optimizer.load_state_dict(ckpt['optimizer'])
+        scheduler.load_state_dict(ckpt['scheduler'])
+        if scaler is not None:
+            scaler.load_state_dict(ckpt['scaler'])
+        best_model.load_state_dict(ckpt['best_model'])
+        best_auc = ckpt['best_auc']
+        best_epoch = ckpt['best_epoch']
+        iteration = ckpt['iteration']
+        history = ckpt['history']
+        sessions = ckpt.get('sessions', 1) + 1
+        start_epoch = ckpt['epoch'] + 1
+        set_rng_state(ckpt['rng'], device)
+        print('[patch] resumed from epoch %d of %d (best val AUC so far %.5f at epoch %d)'
+              % (start_epoch, num_epochs, best_auc, best_epoch))
+
+    def save_checkpoint(epoch):
+        atomic_torch_save({
+            'settings': settings, 'epoch': epoch,
+            'model': model.state_dict(), 'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'scaler': scaler.state_dict() if scaler is not None else None,
+            'best_model': best_model.state_dict(), 'best_auc': best_auc, 'best_epoch': best_epoch,
+            'iteration': iteration, 'history': history, 'sessions': sessions,
+            'rng': get_rng_state(device)}, ckpt_path)
+        secs = [h['seconds'] for h in history]
+        atomic_json({'epochs_done': epoch + 1, 'num_epochs': num_epochs,
+                     'mean_epoch_seconds': float(np.mean(secs[-5:])) if secs else None,
+                     'eval_seconds_per_sample': history[-1]['eval_seconds_per_sample'] if history else None,
+                     'best_val_auc': best_auc, 'best_epoch': best_epoch, 'updated': time.time()}, progress_path)
+
+    n_eval_final = len(train_dataset_at_eval) + len(val_dataset) + len(test_dataset)
+    last_saved_epoch = start_epoch - 1
+    last_save_time = time.time()
+    # ------------------------------------------------------------ end PATCH
+
+    for epoch in trange(start_epoch, num_epochs):  # PATCH: start at start_epoch
+
+        # PATCH: stop before the deadline if the next epoch (and the final evaluation) might not fit
+        if deadline is not None and history:
+            recent = [h['seconds'] for h in history[-3:]]
+            need = max(recent) * 1.15 + 30
+            if epoch == num_epochs - 1:
+                need += history[-1]['eval_seconds_per_sample'] * n_eval_final * 1.3 + 60
+            if time.time() + need > deadline:
+                if last_saved_epoch != epoch - 1:
+                    save_checkpoint(epoch - 1)
+                writer.close()
+                print('[patch] PAUSED before epoch %d to stay inside the deadline; rerun the same command to resume.' % epoch)
+                return EXIT_PAUSED
+        t_epoch = time.time()
+
+        train_loss = train(model, train_loader, criterion, optimizer, device, writer, scaler=scaler, channels_last=channels_last)
+
+        if skip_logging_evals:  # PATCH
+            consume_loader_rng(train_loader_at_eval)
+            train_metrics = [float('nan')] * 3
+        else:
+            train_metrics = test(model, train_evaluator, train_loader_at_eval, criterion, device, run, **evkw)
+        t_val = time.time()
+        val_metrics = test(model, val_evaluator, val_loader, criterion, device, run, **evkw)
+        eval_seconds_per_sample = (time.time() - t_val) / len(val_dataset)  # PATCH
+        if skip_logging_evals:  # PATCH
+            consume_loader_rng(test_loader)
+            test_metrics = [float('nan')] * 3
+        else:
+            test_metrics = test(model, test_evaluator, test_loader, criterion, device, run, **evkw)
+
+        scheduler.step()
+
+        for i, key in enumerate(train_logs):
+            log_dict[key] = train_metrics[i]
+        for i, key in enumerate(val_logs):
+            log_dict[key] = val_metrics[i]
+        for i, key in enumerate(test_logs):
+            log_dict[key] = test_metrics[i]
+
+        for key, value in log_dict.items():
+            if not (isinstance(value, float) and np.isnan(value)):  # PATCH
+                writer.add_scalar(key, value, epoch)
+
+        cur_auc = val_metrics[1]
+        if cur_auc > best_auc:
+            best_epoch = epoch
+            best_auc = cur_auc
+            best_model = deepcopy(model)
+
+            print('cur_best_auc:', best_auc)
+            print('cur_best_epoch', best_epoch)
+
+        # PATCH: per-epoch record, progress line and checkpoint
+        seconds = time.time() - t_epoch
+        history.append({'epoch': epoch, 'train_loss': float(train_loss), 'val_auc': float(val_metrics[1]),
+                        'val_acc': float(val_metrics[2]), 'test_auc': float(test_metrics[1]),
+                        'test_acc': float(test_metrics[2]), 'lr': optimizer.param_groups[0]['lr'],
+                        'seconds': seconds, 'eval_seconds_per_sample': eval_seconds_per_sample})
+        mem = ''
+        if device.type == 'cuda':
+            mem = '  peak GPU memory %.1f GiB' % (torch.cuda.max_memory_allocated(device) / 2**30)
+        line = '[epoch %d/%d] train_loss %.4f  val_auc %.5f  val_acc %.5f  %.0fs (%.1f train volumes/s)%s' % (
+            epoch + 1, num_epochs, train_loss, val_metrics[1], val_metrics[2], seconds,
+            len(train_dataset) / max(seconds, 1e-9), mem)
+        print(line, flush=True)
+        with open(os.path.join(output_root, 'epochs.log'), 'a') as f:
+            f.write(line + '\n')
+        if epoch == num_epochs - 1 or time.time() - last_save_time >= ckpt_every:
+            save_checkpoint(epoch)
+            last_saved_epoch = epoch
+            last_save_time = time.time()
+
+    # NOTE: the released script saves the LAST-epoch weights under the name best_model.pth
+    # (the 2D script saves best_model). Kept as released; reported metrics use best_model below.
+    state = {
+        'net': model.state_dict(),
+    }
+
+    path = os.path.join(output_root, 'best_model.pth')
+    if not no_weights:  # PATCH: optional
+        torch.save(state, path)
+
+    train_metrics = test(best_model, train_evaluator, train_loader_at_eval, criterion, device, run, output_root, **evkw)
+    val_metrics = test(best_model, val_evaluator, val_loader, criterion, device, run, output_root, **evkw)
+    test_metrics = test(best_model, test_evaluator, test_loader, criterion, device, run, output_root, **evkw)
+
+    train_log = 'train  auc: %.5f  acc: %.5f\n' % (train_metrics[1], train_metrics[2])
+    val_log = 'val  auc: %.5f  acc: %.5f\n' % (val_metrics[1], val_metrics[2])
+    test_log = 'test  auc: %.5f  acc: %.5f\n' % (test_metrics[1], test_metrics[2])
+
+    log = '%s\n' % (data_flag) + train_log + val_log + test_log + '\n'
+    print(log)
+
+    with open(os.path.join(output_root, '%s_log.txt' % (data_flag)), 'a') as f:
+        f.write(log)
+
+    writer.close()
+
+    # PATCH: machine-readable result for collect_results.py, then drop the large checkpoint
+    secs = [h['seconds'] for h in history]
+    atomic_json({
+        'data_flag': data_flag, 'run': run, 'seed': seed, 'model_flag': model_flag, 'conv': conv,
+        'pretrained_3d': pretrained_3d, 'as_rgb': as_rgb, 'shape_transform': shape_transform, 'size': size,
+        'batch_size': batch_size, 'num_epochs': num_epochs, 'lr': lr, 'milestones': milestones, 'amp': amp,
+        'skip_logging_evals': skip_logging_evals, 'workers': workers,
+        'best_epoch': best_epoch, 'best_val_auc': float(best_auc),
+        'train_auc': float(train_metrics[1]), 'train_acc': float(train_metrics[2]),
+        'val_auc': float(val_metrics[1]), 'val_acc': float(val_metrics[2]),
+        'test_auc': float(test_metrics[1]), 'test_acc': float(test_metrics[2]),
+        'train_hours': float(np.sum(secs)) / 3600, 'sessions': sessions,
+        'device': torch.cuda.get_device_name(device) if device.type == 'cuda' else device.type,
+        'torch': torch.__version__, 'medmnist': medmnist.__version__,
+        'python': platform.python_version(), 'finished_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'script': os.path.basename(__file__)}, result_path)
+    if os.path.exists(ckpt_path):
+        os.remove(ckpt_path)
+    return 0
+
+
+def train(model, train_loader, criterion, optimizer, device, writer, scaler=None, channels_last=False):
+    total_loss = []
+    global iteration
+
+    model.train()
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        optimizer.zero_grad()
+        inputs = inputs.to(device, non_blocking=True)  # PATCH
+        if channels_last:  # PATCH (AMP only)
+            inputs = inputs.contiguous(memory_format=torch.channels_last_3d)
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=scaler is not None):  # PATCH
+            outputs = model(inputs)
+
+            targets = torch.squeeze(targets, 1).long().to(device)
+            loss = criterion(outputs, targets)
+
+        total_loss.append(loss.item())
+        writer.add_scalar('train_loss_logs', loss.item(), iteration)
+        iteration += 1
+
+        if scaler is None:
+            loss.backward()
+            optimizer.step()
+        else:  # PATCH: mixed precision
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+    epoch_loss = sum(total_loss)/len(total_loss)
+    return epoch_loss
+
+
+def test(model, evaluator, data_loader, criterion, device, run, save_folder=None, amp=False, channels_last=False):
+
+    model.eval()
+
+    total_loss = []
+    y_score = torch.tensor([]).to(device)
+
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(data_loader):
+            inputs = inputs.to(device, non_blocking=True)  # PATCH
+            if channels_last:  # PATCH (AMP only)
+                inputs = inputs.contiguous(memory_format=torch.channels_last_3d)
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp):  # PATCH
+                outputs = model(inputs)
+            outputs = outputs.float()  # PATCH: no-op without AMP
+
+            targets = torch.squeeze(targets, 1).long().to(device)
+            loss = criterion(outputs, targets)
+            m = nn.Softmax(dim=1)
+            outputs = m(outputs).to(device)
+            targets = targets.float().resize_(len(targets), 1)
+
+            total_loss.append(loss.item())
+
+            y_score = torch.cat((y_score, outputs), 0)
+
+        y_score = y_score.detach().cpu().numpy()
+        auc, acc = evaluator.evaluate(y_score, save_folder, run)
+
+        test_loss = sum(total_loss) / len(total_loss)
+
+        return [test_loss, auc, acc]
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='RUN Baseline model of MedMNIST3D')
+
+    parser.add_argument('--data_flag',
+                        default='organmnist3d',
+                        type=str)
+    parser.add_argument('--output_root',
+                        default='./output',
+                        help='output root, where to save models',
+                        type=str)
+    parser.add_argument('--num_epochs',
+                        default=100,
+                        help='num of epochs of training, the script would only test model if set num_epochs to 0',
+                        type=int)
+    parser.add_argument('--size',
+                        default=28,
+                        help='the image size of the dataset, 28 or 64, default=28',
+                        type=int)
+    parser.add_argument('--gpu_ids',
+                        default='0',
+                        help='PATCH: 0, 1, ... for a CUDA GPU, mps for an Apple-silicon Mac, cpu for the CPU',
+                        type=str)
+    parser.add_argument('--batch_size',
+                        default=32,
+                        type=int)
+    parser.add_argument('--conv',
+                        default='ACSConv',
+                        help='choose converter from Conv2_5d, Conv3d, ACSConv',
+                        type=str)
+    parser.add_argument('--pretrained_3d',
+                        default='i3d',
+                        type=str)
+    parser.add_argument('--download',
+                        action="store_true")
+    parser.add_argument('--as_rgb',
+                        help='to copy channels, tranform shape 1x28x28x28 to 3x28x28x28',
+                        action="store_true")
+    parser.add_argument('--shape_transform',
+                        help='for shape dataset, whether multiply 0.5 at eval',
+                        action="store_true")
+    parser.add_argument('--model_path',
+                        default=None,
+                        help='root of the pretrained model to test',
+                        type=str)
+    parser.add_argument('--model_flag',
+                        default='resnet18',
+                        help='choose backbone, resnet18/resnet50',
+                        type=str)
+    parser.add_argument('--run',
+                        default='model1',
+                        help='to name a standard evaluation csv file, named as {flag}_{split}_[AUC]{auc:.3f}_[ACC]{acc:.3f}@{run}.csv',
+                        type=str)
+    # PATCH: new options (all off by default)
+    parser.add_argument('--seed', default=None, type=int, help='PATCH: seed python, numpy and torch')
+    parser.add_argument('--amp', action='store_true', help='PATCH: float16 mixed precision on CUDA')
+    parser.add_argument('--skip_logging_evals', action='store_true',
+                        help='PATCH: skip the per-epoch train/test evaluations that are only logged to TensorBoard')
+    parser.add_argument('--workers', default=0, type=int, help='PATCH: DataLoader worker processes')
+    parser.add_argument('--deadline', default=None, type=float,
+                        help='PATCH: unix time; stop cleanly (exit code 3) before it, rerun to resume')
+    parser.add_argument('--no_weights', action='store_true', help='PATCH: do not write best_model.pth')
+    parser.add_argument('--ckpt_every', default=600, type=float,
+                        help='PATCH: seconds between checkpoints (one is always written at the end and before a pause)')
+
+
+    args = parser.parse_args()
+    data_flag = args.data_flag
+    output_root = args.output_root
+    num_epochs = args.num_epochs
+    size = args.size
+    gpu_ids = args.gpu_ids
+    batch_size = args.batch_size
+    conv = args.conv
+    pretrained_3d = args.pretrained_3d
+    download = args.download
+    model_flag = args.model_flag
+    as_rgb = args.as_rgb
+    model_path = args.model_path
+    shape_transform = args.shape_transform
+    run = args.run
+
+    code = main(data_flag, output_root, num_epochs, gpu_ids, batch_size, size, conv, pretrained_3d, download, model_flag, as_rgb, shape_transform, model_path, run,
+                seed=args.seed, amp=args.amp, skip_logging_evals=args.skip_logging_evals, workers=args.workers,
+                deadline=args.deadline, no_weights=args.no_weights, ckpt_every=args.ckpt_every)  # PATCH
+    sys.exit(code or 0)  # PATCH
