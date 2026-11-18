@@ -13,8 +13,9 @@ training itself.
 
 ## TL;DR
 
-- **15 of 18 datasets land within one AUC point of the paper.** ChestMNIST, the one I started with, gives
-  0.7713 ± 0.0017 against the reported 0.773.
+- **15 of 18 datasets lose less than one AUC point to the paper.** 13 land within a point either way, and
+  FractureMNIST3D and AdrenalMNIST3D come out more than a point *above* it. ChestMNIST, the one I started with,
+  gives 0.7713 ± 0.0017 against the reported 0.773.
 - The 3 that miss (BreastMNIST, VesselMNIST3D, SynapseMNIST3D) all have small test sets, and my 5 runs on each
   spread more than the gap. The paper's number is inside my 95% interval every time.
 - The big 2D datasets reproduce really tightly. All eight with more than 10k training images are within half a
@@ -56,8 +57,10 @@ Every single run, the 95% intervals, the float32 check and the rest are in **[RE
 
 ![How far each dataset lands from the paper, and ChestMNIST's training curve](assets/results_overview.png)
 
-*Left: my test AUC minus the paper's, per dataset (big dot = mean of 5 runs, bar = 95% interval, small dots =
-single runs, dashed line = one point below). Right: ChestMNIST run 5, validation AUC and training loss per epoch.*
+*Left: my test AUC minus the paper's for every dataset, biggest test set at the top (test set size on the right).
+Big dot = mean of my 5 runs, light bar = 95% interval, grey dots = the single runs, shaded area = losing more than
+one AUC point. The spread blows up on the six smallest test sets (156 to 382 images), and everything with 400+ test
+images is within a point of the paper. Right: ChestMNIST run 5, validation AUC and training loss per epoch.*
 
 ## What I found
 
@@ -70,8 +73,8 @@ point or less. If your code is broken, these are where you'd see it, and they lo
 of the test set than about the code. BreastMNIST's test set has 156 images. Two small 3D sets went the other way
 and came out *above* the paper: FractureMNIST3D by 1.9 points and AdrenalMNIST3D by 1.6.
 
-**Depends how you read "1%".** As one AUC point, 3 datasets miss. As 1% of the paper's value, RetinaMNIST
-(−1.18%) and NoduleMNIST3D (−1.03%) also miss, just barely.
+**Depends how you read "1%".** As a loss of more than one AUC point, 3 datasets miss. As a loss of more than 1%
+of the paper's value, RetinaMNIST (−1.18%) and NoduleMNIST3D (−1.03%) also miss, just barely.
 
 **Accuracy moves a lot more than AUC.** PneumoniaMNIST is 4.5 points short on accuracy while its AUC is only 0.6
 short. VesselMNIST3D is 4.2 short and BreastMNIST 2.5 short, TissueMNIST sits right on −1.0, and FractureMNIST3D
