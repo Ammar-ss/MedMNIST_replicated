@@ -1,140 +1,51 @@
-# MedMNIST v2 baselines, rerun from scratch
+# MedMNIST baselines, rerun
 
-I reran the ResNet-50 baselines from **MedMNIST v2** ([Yang et al., *Scientific Data* 2023](https://doi.org/10.1038/s41597-022-01721-8))
-with the authors' own training scripts from [MedMNIST/experiments](https://github.com/MedMNIST/experiments)
-(commit `70b6b3a`). That's ResNet-50 at 224 px on all 12 2D datasets and ResNet-50+3D on all 6 3D datasets,
-5 runs each with seeds 1 to 5. So 90 training runs, almost all of them on free Kaggle T4s.
+Rerun of the ResNet-50 baselines from MedMNIST v2 ([Yang et al., Scientific Data 2023](https://doi.org/10.1038/s41597-022-01721-8)) using the authors' training scripts from [MedMNIST/experiments](https://github.com/MedMNIST/experiments) (commit `70b6b3a`). ResNet-50 (224) on the 12 2D datasets and ResNet-50+3D on the 6 3D datasets, 5 runs each with seeds 1 to 5, so 90 runs in total. Almost all of them ran on free Kaggle T4s.
 
-I wanted solid baselines before trying anything of my own on MedMNIST, and you can only trust a baseline you've
-run yourself. Most of the work turned out to be fitting 100-epoch runs into 12-hour Kaggle sessions, not the
-training itself.
-
-**[Full results](RESULTS.md)** · **[Notebooks](notebooks/)** · **[Patched scripts](scripts/)** · **[Raw numbers](results/)**
-
-## TL;DR
-
-- **15 of 18 datasets lose less than one AUC point to the paper.** 13 land within a point either way, and
-  FractureMNIST3D and AdrenalMNIST3D come out more than a point *above* it. ChestMNIST, the one I started with,
-  gives 0.7713 ± 0.0017 against the reported 0.773.
-- The 3 that miss (BreastMNIST, VesselMNIST3D, SynapseMNIST3D) all have small test sets, and my 5 runs on each
-  spread more than the gap. The paper's number is inside my 95% interval every time.
-- The big 2D datasets reproduce really tightly. All eight with more than 10k training images are within half a
-  point of the paper, and their 5 runs barely move (SD of 0.25 points or less).
-- I reran BreastMNIST in float32 to check whether my mixed-precision change caused the miss. It didn't.
-- ChestMNIST's validation AUC peaks at epoch 13 out of 100 and then drops almost 8 points while the training
-  loss goes to zero. The reported number only holds up because the script keeps the best epoch.
+Full tables are in [RESULTS.md](RESULTS.md).
 
 ## Results
 
-Test AUC and accuracy, mean ± SD over 5 runs. **Paper** is the ResNet-50 (224) row for 2D and the ResNet-50+3D
-row for 3D (Tables 3 and 4 of the paper). **Diff.** is mine minus the paper. ⚠️ means more than one AUC point
-below the paper.
+Test AUC and ACC, mean ± SD over 5 runs. Paper is the ResNet-50 (224) row for 2D and the ResNet-50+3D row for 3D (Tables 3 and 4 of the paper). Diff. is mine minus the paper. * means more than one AUC point below the paper.
 
-| Dataset | AUC (mean ± SD) | Paper | Diff. | ACC (mean ± SD) | Paper | Diff. |
+| Dataset | AUC | Paper | Diff. | ACC | Paper | Diff. |
 |---|---|---|---|---|---|---|
-| *2D, ResNet-50 (224)* | | | | | | |
-| ChestMNIST | 0.7713 ± 0.0017 | 0.773 | −0.0017 | 0.9474 ± 0.0004 | 0.948 | −0.0006 |
+| ChestMNIST | 0.7713 ± 0.0017 | 0.773 | -0.0017 | 0.9474 ± 0.0004 | 0.948 | -0.0006 |
 | PathMNIST | 0.9896 ± 0.0025 | 0.989 | +0.0006 | 0.8953 ± 0.0129 | 0.892 | +0.0033 |
-| DermaMNIST | 0.9110 ± 0.0039 | 0.912 | −0.0010 | 0.7322 ± 0.0233 | 0.731 | +0.0012 |
-| OCTMNIST | 0.9604 ± 0.0017 | 0.958 | +0.0024 | 0.7680 ± 0.0078 | 0.776 | −0.0080 |
-| PneumoniaMNIST | 0.9562 ± 0.0114 | 0.962 | −0.0058 | 0.8388 ± 0.0271 | 0.884 | −0.0452 |
-| RetinaMNIST | 0.7075 ± 0.0127 | 0.716 | −0.0085 | 0.5110 ± 0.0236 | 0.511 | +0.0000 |
-| BreastMNIST ⚠️ | 0.8343 ± 0.0356 | 0.866 | −0.0317 | 0.8167 ± 0.0407 | 0.842 | −0.0253 |
+| DermaMNIST | 0.9110 ± 0.0039 | 0.912 | -0.0010 | 0.7322 ± 0.0233 | 0.731 | +0.0012 |
+| OCTMNIST | 0.9604 ± 0.0017 | 0.958 | +0.0024 | 0.7680 ± 0.0078 | 0.776 | -0.0080 |
+| PneumoniaMNIST | 0.9562 ± 0.0114 | 0.962 | -0.0058 | 0.8388 ± 0.0271 | 0.884 | -0.0452 |
+| RetinaMNIST | 0.7075 ± 0.0127 | 0.716 | -0.0085 | 0.5110 ± 0.0236 | 0.511 | +0.0000 |
+| BreastMNIST * | 0.8343 ± 0.0356 | 0.866 | -0.0317 | 0.8167 ± 0.0407 | 0.842 | -0.0253 |
 | BloodMNIST | 0.9975 ± 0.0001 | 0.997 | +0.0005 | 0.9550 ± 0.0026 | 0.950 | +0.0050 |
-| TissueMNIST | 0.9275 ± 0.0018 | 0.932 | −0.0045 | 0.6700 ± 0.0050 | 0.680 | −0.0100 |
-| OrganAMNIST | 0.9963 ± 0.0017 | 0.998 | −0.0017 | 0.9376 ± 0.0050 | 0.947 | −0.0094 |
+| TissueMNIST | 0.9275 ± 0.0018 | 0.932 | -0.0045 | 0.6700 ± 0.0050 | 0.680 | -0.0100 |
+| OrganAMNIST | 0.9963 ± 0.0017 | 0.998 | -0.0017 | 0.9376 ± 0.0050 | 0.947 | -0.0094 |
 | OrganCMNIST | 0.9937 ± 0.0006 | 0.993 | +0.0007 | 0.9189 ± 0.0025 | 0.911 | +0.0079 |
-| OrganSMNIST | 0.9757 ± 0.0014 | 0.975 | +0.0007 | 0.7843 ± 0.0069 | 0.785 | −0.0007 |
-| *3D, ResNet-50+3D* | | | | | | |
-| OrganMNIST3D | 0.9930 ± 0.0024 | 0.994 | −0.0010 | 0.8761 ± 0.0211 | 0.883 | −0.0069 |
-| NoduleMNIST3D | 0.8660 ± 0.0261 | 0.875 | −0.0090 | 0.8393 ± 0.0276 | 0.847 | −0.0077 |
+| OrganSMNIST | 0.9757 ± 0.0014 | 0.975 | +0.0007 | 0.7843 ± 0.0069 | 0.785 | -0.0007 |
+| OrganMNIST3D | 0.9930 ± 0.0024 | 0.994 | -0.0010 | 0.8761 ± 0.0211 | 0.883 | -0.0069 |
+| NoduleMNIST3D | 0.8660 ± 0.0261 | 0.875 | -0.0090 | 0.8393 ± 0.0276 | 0.847 | -0.0077 |
 | FractureMNIST3D | 0.7441 ± 0.0202 | 0.725 | +0.0191 | 0.5425 ± 0.0478 | 0.494 | +0.0485 |
 | AdrenalMNIST3D | 0.8438 ± 0.0277 | 0.828 | +0.0158 | 0.7980 ± 0.0162 | 0.745 | +0.0530 |
-| VesselMNIST3D ⚠️ | 0.8791 ± 0.0298 | 0.907 | −0.0279 | 0.8764 ± 0.0437 | 0.918 | −0.0416 |
-| SynapseMNIST3D ⚠️ | 0.8399 ± 0.0312 | 0.851 | −0.0111 | 0.7892 ± 0.0286 | 0.795 | −0.0058 |
+| VesselMNIST3D * | 0.8791 ± 0.0298 | 0.907 | -0.0279 | 0.8764 ± 0.0437 | 0.918 | -0.0416 |
+| SynapseMNIST3D * | 0.8399 ± 0.0312 | 0.851 | -0.0111 | 0.7892 ± 0.0286 | 0.795 | -0.0058 |
 
-Every single run, the 95% intervals, the float32 check and the rest are in **[RESULTS.md](RESULTS.md)**.
+15 of the 18 datasets are less than one AUC point below the paper. The three that miss (BreastMNIST, VesselMNIST3D, SynapseMNIST3D) all have small test sets (156 to 382 images), and for all three the paper's number is inside the 95% interval of my 5 runs. Mixed precision is the only change I made that affects the arithmetic, so I reran BreastMNIST in float32 as a check. It gave 0.8423 ± 0.0282, so that is not the cause.
 
-![How far each dataset lands from the paper, and ChestMNIST's training curve](assets/results_overview.png)
+![results](results_overview.png)
 
-*Left: my test AUC minus the paper's for every dataset, biggest test set at the top (test set size on the right).
-Big dot = mean of my 5 runs, light bar = 95% interval, grey dots = the single runs, shaded area = losing more than
-one AUC point. The spread blows up on the six smallest test sets (156 to 382 images), and everything with 400+ test
-images is within a point of the paper. Right: ChestMNIST run 5, validation AUC and training loss per epoch.*
+Left: my test AUC minus the paper's for each dataset, with the number of test images in brackets. Dots are the mean of 5 runs, error bars the 95% CI, crosses the single runs and the red dashed line is one point below the paper. Right: validation AUC and training loss of ChestMNIST run 5. The best epoch is 13, after which the model overfits. The dashed lines are the learning-rate drops at epochs 50 and 75.
 
-## What I found
+## Files
 
-**The big datasets are boring, in a good way.** PathMNIST, ChestMNIST, OCTMNIST, BloodMNIST, TissueMNIST and the
-three Organ 2D sets all land within 0.5 AUC points of the paper, and the SD over their 5 seeds is a quarter of a
-point or less. If your code is broken, these are where you'd see it, and they look fine.
-
-**The small datasets are noisy.** On BreastMNIST, RetinaMNIST and five of the six 3D sets, my 5 seeds spread by
-1.3 to 3.6 AUC points (SD). That's more than the one-point bar itself, so a miss on these says more about the size
-of the test set than about the code. BreastMNIST's test set has 156 images. Two small 3D sets went the other way
-and came out *above* the paper: FractureMNIST3D by 1.9 points and AdrenalMNIST3D by 1.6.
-
-**Depends how you read "1%".** As a loss of more than one AUC point, 3 datasets miss. As a loss of more than 1%
-of the paper's value, RetinaMNIST (−1.18%) and NoduleMNIST3D (−1.03%) also miss, just barely.
-
-**Accuracy moves a lot more than AUC.** PneumoniaMNIST is 4.5 points short on accuracy while its AUC is only 0.6
-short. VesselMNIST3D is 4.2 short and BreastMNIST 2.5 short, TissueMNIST sits right on −1.0, and FractureMNIST3D
-and AdrenalMNIST3D are about 5 points *above*. I haven't dug into PneumoniaMNIST yet. I judge the bar on AUC since
-that's the main number the benchmark compares, but the accuracy numbers are all in the tables.
-
-**It wasn't the mixed precision.** Float16 is the only change I made that touches the maths, so I reran all 5
-BreastMNIST runs in float32. They average 0.8423 ± 0.0282, against 0.8343 with mixed precision and 0.866 in the
-paper, and the run-by-run changes go both ways (−2.8 to +5.6 points). So float16 isn't what separates my
-BreastMNIST runs from the paper.
-
-**ChestMNIST peaks early and then memorises.** In run 5 the validation AUC is best at epoch 13 (0.774) and is
-about 7.8 points lower by epoch 100, while the training loss goes to basically zero. The script keeps the best
-validation epoch, so the test number is fine, but none of the last 87 epochs ever beats epoch 13 on validation.
-
-## What's in here
-
-```
-medmnist-v2-replication/
-├── README.md                        you are here
-├── RESULTS.md                       every table: each run, intervals, float32 check, ChestMNIST curve, timing
-├── requirements.txt
-├── notebooks/                       one Kaggle notebook per dataset, 01_chestmnist ... 18_synapsemnist3d
-├── scripts/
-│   ├── MedMNIST2D/train_and_eval_pytorch_resumable.py   authors' 2D script + my patches
-│   ├── MedMNIST3D/train_and_eval_pytorch_resumable.py   authors' 3D script + my patches
-│   ├── patches_vs_released.diff     every change against the released scripts
-│   └── LICENSE                      the authors' Apache 2.0 licence
-├── results/
-│   ├── summary.csv                  one row per dataset (sizes, every run, mean, SD, paper, diff, AUC and ACC)
-│   ├── all_runs.csv                 one row per run (AUC, ACC, GPU, hours, which session it ran in)
-│   ├── runs.json                    all 90 result.json files, exactly as the script wrote them
-│   ├── float32_breastmnist.csv      the float32 rerun
-│   ├── chestmnist_run5_history.json loss and validation AUC/ACC for every epoch of ChestMNIST run 5
-│   └── performance_table_filled.xlsx  the same numbers in spreadsheet form (AUC sheet, ACC sheet, every run)
-└── assets/
-    └── results_overview.png / .pdf  the figure above
-```
+- `notebooks/`: one Kaggle notebook per dataset (01_chestmnist to 18_synapsemnist3d)
+- `scripts/`: the authors' 2D and 3D training scripts with my changes, plus `patches_vs_released.diff` and their license
+- `results/`: every run (`runs.json`, `all_runs.csv`), the per-dataset summary, the float32 BreastMNIST rerun, the ChestMNIST run 5 history and the filled spreadsheet
 
 ## Running it
 
-### On Kaggle (this is what I did)
+On Kaggle: upload a notebook, set the accelerator to GPU T4 x2, turn internet on and run all. The notebook clones the authors' repo at the right commit, writes the patched scripts, downloads the data and trains two runs at a time. ChestMNIST, PathMNIST, OCTMNIST and TissueMNIST need more than one 12-hour session. For those, add the previous session's output as input and run it again, and finished runs are skipped while unfinished ones resume from their checkpoint.
 
-1. Upload the notebook for the dataset you want (say `notebooks/07_breastmnist.ipynb`) to Kaggle.
-2. Set the accelerator to **GPU T4 x2**, turn **internet on**, and hit **Save & Run All**.
-3. That's it for most datasets. The notebook clones the authors' repo at the right commit, writes in my patched
-   scripts, downloads the data and trains two runs at a time (one per GPU). It stops cleanly before Kaggle's
-   12-hour limit.
-4. ChestMNIST, PathMNIST and OCTMNIST take 8 to 9 hours per run, and TissueMNIST about 15, so those need more
-   than one session. Start the next session with the previous output attached through **Add Input** and run it
-   again: finished runs get skipped and stopped runs resume from their last checkpoint.
-
-Each run ends up in its own folder with a `result.json`, the logs and the test predictions, and the notebook
-writes a `summary.csv` and a `results_only.zip` (no weights) at the end. Rough times per dataset are in
-[RESULTS.md](RESULTS.md#6-hardware-and-time).
-
-### Without Kaggle
-
-The patched scripts import `models.py` and `utils.py` from the authors' repo, so they have to sit inside it. I
-only ever ran them through the notebooks, but these are the same commands the notebooks call:
+Without Kaggle, the scripts need to sit inside the authors' repo because they import its `models.py` and `utils.py`:
 
 ```bash
 git clone https://github.com/MedMNIST/experiments.git
@@ -149,7 +60,7 @@ python train_and_eval_pytorch_resumable.py --data_flag breastmnist --model_flag 
     --size 28 --batch_size 128 --num_epochs 100 --gpu_ids 0 --output_root ./output --run run1 --seed 1 \
     --amp --skip_logging_evals --download
 
-# 3D, e.g. SynapseMNIST3D run 1 (add --shape_transform for adrenalmnist3d and vesselmnist3d, like the paper)
+# 3D, e.g. SynapseMNIST3D run 1 (add --shape_transform for adrenalmnist3d and vesselmnist3d)
 cp /path/to/this/repo/scripts/MedMNIST3D/train_and_eval_pytorch_resumable.py ../MedMNIST3D/
 cd ../MedMNIST3D
 python train_and_eval_pytorch_resumable.py --data_flag synapsemnist3d --model_flag resnet50 --conv Conv3d \
@@ -157,41 +68,25 @@ python train_and_eval_pytorch_resumable.py --data_flag synapsemnist3d --model_fl
     --amp --skip_logging_evals --download
 ```
 
-Drop `--amp` to train in float32. Run *k* used seed *k* for all 90 runs.
+Drop `--amp` to train in float32.
 
-## What I changed in the authors' scripts
+## Changes to the authors' scripts
 
-Nothing about what the model learns. The model, data, loss, optimiser, learning-rate schedule, epochs, batch size
-and the rule for picking the best epoch are all as released. The changes are only there to get long runs through
-12-hour sessions:
+The model, data, loss, optimizer, schedule, epochs, batch size and best-epoch selection are the same as released. I only changed how the runs execute so they fit into 12-hour Kaggle sessions:
 
-- **mixed precision** (float16), for speed;
-- **a checkpoint every ten minutes**, so a run can stop cleanly before the session ends and resume in the next one;
-- **no extra pass over the training and test sets after every epoch.** The released script only does that to log
-  to TensorBoard. The validation pass that picks the best epoch still runs every epoch;
-- **two guards against float16 overflow**, added after one PathMNIST run ended in a NaN loss. They do nothing
-  unless a value overflows, and the runs before that used the script without them;
-- **a one-line fix** that lets ACSConv 0.1.1 convert batch-norm layers on current PyTorch.
+- mixed precision (`--amp`)
+- a checkpoint every 10 minutes so a run can resume in the next session
+- skipping the per-epoch train and test evaluations, which the original script only logs to TensorBoard (validation still runs every epoch)
+- two guards against float16 overflow, added after one PathMNIST run hit NaN (they do nothing unless an overflow happens)
+- a one-line fix so ACSConv 0.1.1 can convert batch-norm layers on current PyTorch
 
-Every change is marked `# PATCH` in `scripts/`, and `scripts/patches_vs_released.diff` shows all of them against
-the released files.
+All changes are marked `# PATCH` in the scripts and listed in `scripts/patches_vs_released.diff`.
 
-## Stuff that went wrong along the way
-
-- One PathMNIST run hit a float16 overflow and its loss turned into NaN partway through. That's where the overflow
-  guards came from.
-- ACSConv 0.1.1 crashes when it converts batch-norm layers on recent PyTorch versions. That's the one-line fix in
-  the 3D script.
-- I lost access to the server that ran four of the ChestMNIST runs before I had copied their folders, so for those
-  four I only have the numbers from the training log. `all_runs.csv` and `runs.json` both say so.
-- The free Kaggle quota was the real limit. TissueMNIST alone is about 75 GPU-hours for 5 runs, so I packed several
-  datasets into each session and spread the long runs over several sessions. The notebooks here are the cleaned-up,
-  one-dataset versions of that code.
+Four of the ChestMNIST runs were trained on a server I later lost access to, so for those I only have the numbers from the training log. This is noted in `runs.json` and `all_runs.csv`.
 
 ## Credit
 
-The datasets and the original training scripts belong to the MedMNIST team. If you use any of this, please cite
-their paper:
+The datasets and original training scripts are from the MedMNIST team (Apache 2.0, see `scripts/LICENSE`). If you use this, please cite their paper:
 
 ```bibtex
 @article{medmnistv2,
@@ -206,7 +101,4 @@ their paper:
 }
 ```
 
-The 3D models are converted with [ACSConv](https://github.com/M3DV/ACSConv) (Yang et al., *IEEE JBHI* 2021).
-
-Their experiments repository is released under the Apache License 2.0 (a copy is in `scripts/LICENSE`). The
-scripts here and inside the notebooks are modified versions of theirs, with every change marked.
+The 3D models use [ACSConv](https://github.com/M3DV/ACSConv) (Yang et al., IEEE JBHI 2021).
