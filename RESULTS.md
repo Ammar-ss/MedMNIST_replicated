@@ -1,21 +1,13 @@
-# Full results
+# Results
 
 Everything on this page comes from `results/runs.json` (all 90 `result.json` files, exactly as the training
 script wrote them) and the CSVs next to it. Test AUC and ACC are what `medmnist.Evaluator` reports on the test
-split, for the epoch with the best validation AUC (the authors' rule). **Paper** is the ResNet-50 (224) row for 2D
+split, for the epoch with the best validation AUC (the authors' rule). Paper is the ResNet-50 (224) row for 2D
 and the ResNet-50+3D row for 3D in Tables 3 and 4 of MedMNIST v2. Run *k* always used seed *k*.
-
-1. [Summary](#1-summary)
-2. [Test AUC, every run](#2-test-auc-every-run)
-3. [Test accuracy, every run](#3-test-accuracy-every-run)
-4. [Float32 check on BreastMNIST](#4-float32-check-on-breastmnist)
-5. [ChestMNIST: the best epoch comes early](#5-chestmnist-the-best-epoch-comes-early)
-6. [Hardware and time](#6-hardware-and-time)
-7. [How I read the misses](#7-how-i-read-the-misses)
 
 ## 1. Summary
 
-Mean ± SD over 5 runs. **Diff.** is mine minus the paper. ⚠️ = more than one AUC point below the paper.
+Mean ± SD over 5 runs. Diff. is mine minus the paper. * = more than one AUC point below the paper.
 
 | Dataset | AUC (mean ± SD) | Paper | Diff. | ACC (mean ± SD) | Paper | Diff. |
 |---|---|---|---|---|---|---|
@@ -26,7 +18,7 @@ Mean ± SD over 5 runs. **Diff.** is mine minus the paper. ⚠️ = more than on
 | OCTMNIST | 0.9604 ± 0.0017 | 0.958 | +0.0024 | 0.7680 ± 0.0078 | 0.776 | −0.0080 |
 | PneumoniaMNIST | 0.9562 ± 0.0114 | 0.962 | −0.0058 | 0.8388 ± 0.0271 | 0.884 | −0.0452 |
 | RetinaMNIST | 0.7075 ± 0.0127 | 0.716 | −0.0085 | 0.5110 ± 0.0236 | 0.511 | +0.0000 |
-| BreastMNIST ⚠️ | 0.8343 ± 0.0356 | 0.866 | −0.0317 | 0.8167 ± 0.0407 | 0.842 | −0.0253 |
+| BreastMNIST * | 0.8343 ± 0.0356 | 0.866 | −0.0317 | 0.8167 ± 0.0407 | 0.842 | −0.0253 |
 | BloodMNIST | 0.9975 ± 0.0001 | 0.997 | +0.0005 | 0.9550 ± 0.0026 | 0.950 | +0.0050 |
 | TissueMNIST | 0.9275 ± 0.0018 | 0.932 | −0.0045 | 0.6700 ± 0.0050 | 0.680 | −0.0100 |
 | OrganAMNIST | 0.9963 ± 0.0017 | 0.998 | −0.0017 | 0.9376 ± 0.0050 | 0.947 | −0.0094 |
@@ -37,16 +29,16 @@ Mean ± SD over 5 runs. **Diff.** is mine minus the paper. ⚠️ = more than on
 | NoduleMNIST3D | 0.8660 ± 0.0261 | 0.875 | −0.0090 | 0.8393 ± 0.0276 | 0.847 | −0.0077 |
 | FractureMNIST3D | 0.7441 ± 0.0202 | 0.725 | +0.0191 | 0.5425 ± 0.0478 | 0.494 | +0.0485 |
 | AdrenalMNIST3D | 0.8438 ± 0.0277 | 0.828 | +0.0158 | 0.7980 ± 0.0162 | 0.745 | +0.0530 |
-| VesselMNIST3D ⚠️ | 0.8791 ± 0.0298 | 0.907 | −0.0279 | 0.8764 ± 0.0437 | 0.918 | −0.0416 |
-| SynapseMNIST3D ⚠️ | 0.8399 ± 0.0312 | 0.851 | −0.0111 | 0.7892 ± 0.0286 | 0.795 | −0.0058 |
+| VesselMNIST3D * | 0.8791 ± 0.0298 | 0.907 | −0.0279 | 0.8764 ± 0.0437 | 0.918 | −0.0416 |
+| SynapseMNIST3D * | 0.8399 ± 0.0312 | 0.851 | −0.0111 | 0.7892 ± 0.0286 | 0.795 | −0.0058 |
 
 Counted on the means: 13 datasets land within one AUC point of the paper either way, 2 more than a point above it
-(FractureMNIST3D +1.91, AdrenalMNIST3D +1.58) and 3 more than a point below it (the ⚠️ ones). Only a loss counts
+(FractureMNIST3D +1.91, AdrenalMNIST3D +1.58) and 3 more than a point below it (the * ones). Only a loss counts
 against the bar, so 15 of 18 pass it.
 
 ## 2. Test AUC, every run
 
-**95% interval** is mean ± t · SD / √5 with t = 2.776 (4 degrees of freedom). **% of paper** is the difference
+95% interval is mean ± t · SD / √5 with t = 2.776 (4 degrees of freedom). % of paper is the difference
 divided by the paper's value. SD is the sample standard deviation (n − 1).
 
 | Dataset | Train / test | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 | Mean ± SD | 95% interval | Paper | Diff. | % of paper |
@@ -57,7 +49,7 @@ divided by the paper's value. SD is the sample standard deviation (n − 1).
 | OCTMNIST | 97,477 / 1,000 | 0.9610 | 0.9576 | 0.9609 | 0.9602 | 0.9623 | 0.9604 ± 0.0017 | 0.9582 to 0.9626 | 0.958 | +0.0024 | +0.25% |
 | PneumoniaMNIST | 4,708 / 624 | 0.9623 | 0.9452 | 0.9569 | 0.9451 | 0.9717 | 0.9562 ± 0.0114 | 0.9421 to 0.9704 | 0.962 | −0.0058 | −0.60% |
 | RetinaMNIST | 1,080 / 400 | 0.7102 | 0.7177 | 0.7197 | 0.7013 | 0.6888 | 0.7075 ± 0.0127 | 0.6917 to 0.7233 | 0.716 | −0.0085 | −1.18% |
-| BreastMNIST ⚠️ | 546 / 156 | 0.8657 | 0.8412 | 0.8277 | 0.8601 | 0.7766 | 0.8343 ± 0.0356 | 0.7901 to 0.8785 | 0.866 | −0.0317 | −3.67% |
+| BreastMNIST * | 546 / 156 | 0.8657 | 0.8412 | 0.8277 | 0.8601 | 0.7766 | 0.8343 ± 0.0356 | 0.7901 to 0.8785 | 0.866 | −0.0317 | −3.67% |
 | BloodMNIST | 11,959 / 3,421 | 0.9975 | 0.9977 | 0.9975 | 0.9974 | 0.9975 | 0.9975 ± 0.0001 | 0.9974 to 0.9977 | 0.997 | +0.0005 | +0.05% |
 | TissueMNIST | 165,466 / 47,280 | 0.9275 | 0.9304 | 0.9273 | 0.9255 | 0.9270 | 0.9275 ± 0.0018 | 0.9253 to 0.9298 | 0.932 | −0.0045 | −0.48% |
 | OrganAMNIST | 34,561 / 17,778 | 0.9974 | 0.9979 | 0.9950 | 0.9941 | 0.9971 | 0.9963 ± 0.0017 | 0.9942 to 0.9984 | 0.998 | −0.0017 | −0.17% |
@@ -67,10 +59,10 @@ divided by the paper's value. SD is the sample standard deviation (n − 1).
 | NoduleMNIST3D | 1,158 / 310 | 0.8984 | 0.8831 | 0.8559 | 0.8621 | 0.8303 | 0.8660 ± 0.0261 | 0.8335 to 0.8984 | 0.875 | −0.0090 | −1.03% |
 | FractureMNIST3D | 1,027 / 240 | 0.7449 | 0.7200 | 0.7276 | 0.7650 | 0.7628 | 0.7441 ± 0.0202 | 0.7189 to 0.7692 | 0.725 | +0.0191 | +2.63% |
 | AdrenalMNIST3D | 1,188 / 298 | 0.8259 | 0.8545 | 0.8714 | 0.8048 | 0.8625 | 0.8438 ± 0.0277 | 0.8094 to 0.8782 | 0.828 | +0.0158 | +1.91% |
-| VesselMNIST3D ⚠️ | 1,335 / 382 | 0.8962 | 0.8609 | 0.8653 | 0.9229 | 0.8503 | 0.8791 ± 0.0298 | 0.8421 to 0.9162 | 0.907 | −0.0279 | −3.07% |
-| SynapseMNIST3D ⚠️ | 1,230 / 352 | 0.7945 | 0.8708 | 0.8247 | 0.8444 | 0.8650 | 0.8399 ± 0.0312 | 0.8011 to 0.8786 | 0.851 | −0.0111 | −1.31% |
+| VesselMNIST3D * | 1,335 / 382 | 0.8962 | 0.8609 | 0.8653 | 0.9229 | 0.8503 | 0.8791 ± 0.0298 | 0.8421 to 0.9162 | 0.907 | −0.0279 | −3.07% |
+| SynapseMNIST3D * | 1,230 / 352 | 0.7945 | 0.8708 | 0.8247 | 0.8444 | 0.8650 | 0.8399 ± 0.0312 | 0.8011 to 0.8786 | 0.851 | −0.0111 | −1.31% |
 
-The paper's value is inside my 95% interval for all three datasets marked ⚠️.
+The paper's value is inside my 95% interval for all three datasets marked *.
 
 ## 3. Test accuracy, every run
 
@@ -113,17 +105,17 @@ not counted anywhere else.
 | 3 | 0.8277 | 0.7999 | −0.0278 | 0.8141 | 0.7308 |
 | 4 | 0.8601 | 0.8682 | +0.0081 | 0.8333 | 0.8141 |
 | 5 | 0.7766 | 0.8329 | +0.0563 | 0.7500 | 0.7628 |
-| **Mean ± SD** | 0.8343 ± 0.0356 | 0.8423 ± 0.0282 | +0.0080 | 0.8167 ± 0.0407 | 0.7974 ± 0.0487 |
-| **Paper** | 0.866 | | | 0.842 | |
+| Mean ± SD | 0.8343 ± 0.0356 | 0.8423 ± 0.0282 | +0.0080 | 0.8167 ± 0.0407 | 0.7974 ± 0.0487 |
+| Paper | 0.866 | | | 0.842 | |
 
 Float32 comes out 0.8 points higher on average, still 2.4 below the paper, and single seeds move both ways by up
-to 5.6 points. Accuracy goes the other way. So mixed precision doesn't explain the gap; the seed matters much more
-than the number format on a test set of 156 images. Raw numbers: `results/float32_breastmnist.csv`.
+to 5.6 points. Accuracy goes the other way. So mixed precision doesn't explain the gap. On a test set of 156 images the seed matters much
+more than the number format. Raw numbers: `results/float32_breastmnist.csv`.
 
 ## 5. ChestMNIST: the best epoch comes early
 
 Per-epoch log of ChestMNIST run 5 (`results/chestmnist_run5_history.json`, all 100 epochs). Epochs count from 1
-here; `result.json` counts from 0, so its `best_epoch: 12` is epoch 13.
+here. `result.json` counts from 0, so its `best_epoch: 12` is epoch 13.
 
 | Epoch | Train loss | Val AUC | Val ACC |
 |---|---|---|---|
@@ -176,14 +168,14 @@ about twice as many runs as these times suggest.
 
 ## 7. How I read the misses
 
-- **Large datasets reproduce.** All eight 2D datasets with more than 10,000 training images are within 0.5 AUC
+- All eight 2D datasets with more than 10,000 training images are within 0.5 AUC
   points of the paper, with an SD of 0.25 points or less over the 5 seeds.
-- **The misses are on small test sets.** BreastMNIST (156 test images), VesselMNIST3D (382) and SynapseMNIST3D
+- BreastMNIST (156 test images), VesselMNIST3D (382) and SynapseMNIST3D
   (352) miss by 3.2, 2.8 and 1.1 points. My 5 runs on them have SDs of 3.6, 3.0 and 3.1 points, bigger than the
   bar, and the paper's value is inside the 95% interval each time.
-- **The noise goes both ways.** FractureMNIST3D and AdrenalMNIST3D, which are just as small, came out 1.9 and 1.6
+- FractureMNIST3D and AdrenalMNIST3D, which are just as small, came out 1.9 and 1.6
   points above the paper.
-- **Relative reading.** If "under 1%" means 1% of the paper's value instead of one AUC point, RetinaMNIST (−1.18%)
+- If "under 1%" means 1% of the paper's value instead of one AUC point, RetinaMNIST (−1.18%)
   and NoduleMNIST3D (−1.03%) miss as well, narrowly.
-- **Not my patches.** The float32 rerun (section 4) rules out mixed precision for BreastMNIST, and none of the
+- The float32 rerun (section 4) rules out mixed precision for BreastMNIST, and none of the
   other changes touch what the model learns (see the README and `scripts/patches_vs_released.diff`).
